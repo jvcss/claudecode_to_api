@@ -1,0 +1,8 @@
+.venv
+data
+workspace
+.env
+tests
+scripts
+__pycache__
+README.md
