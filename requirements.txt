@@ -1,0 +1,6 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+# Pinado: o wheel embute o CLI do Claude Code (binário estático de 257 MB). Sem pin,
+# um rebuild traz outro CLI — perde reprodutibilidade e invalida o cache de layer.
+claude-agent-sdk==0.2.114
+pydantic-settings>=2.4
