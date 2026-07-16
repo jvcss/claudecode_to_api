@@ -1,0 +1,44 @@
+meta {
+  name: 1. Set Token
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/auth/token
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminKey}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "token": "{{claudeToken}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.stored: eq true
+}
+
+docs {
+  # POST /auth/token  (admin)
+
+  Grava a credencial do Claude Code no gateway. O `token` vem da variável de
+  ambiente `claudeToken` — preencha-a com o resultado de `claude setup-token`
+  (`sk-ant-oat01-...`) ou uma API key do Console (`sk-ant-api...`).
+
+  Resposta: `{"stored": true, "valid": true, "error": null}`.
+
+  - `valid: true` → o ping de validação autenticou com sucesso.
+  - `valid: false` → token errado/expirado (veja `error`); é salvo mesmo assim.
+  - Para pular a validação, adicione `"validate": false` ao corpo.
+}

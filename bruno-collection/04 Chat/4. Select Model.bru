@@ -1,0 +1,40 @@
+meta {
+  name: 4. Select Model
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/v1/chat/completions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{gatewayKey}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "model": "sonnet",
+    "messages": [
+      {"role": "user", "content": "Em uma frase: qual a diferença entre HTTP e HTTPS?"}
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  # Selecionar o modelo por request
+
+  Troque `"model"` por qualquer alias (`sonnet`, `opus`, `haiku`, `fable`) ou ID
+  completo (`claude-opus-4-8`, ...). Um modelo desconhecido (ex.: `gpt-4o`) cai
+  no modelo padrão — a menos que `MODEL_STRICT=true`, que retorna 404.
+}

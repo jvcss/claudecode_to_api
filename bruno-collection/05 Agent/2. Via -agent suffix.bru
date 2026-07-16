@@ -1,0 +1,42 @@
+meta {
+  name: 2. Via -agent suffix
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/v1/chat/completions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{gatewayKey}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "model": "sonnet-agent",
+    "messages": [
+      {"role": "user", "content": "Liste os arquivos do diretório atual e responda o que encontrou."}
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  # Modo agente via sufixo `-agent`
+
+  Para clientes que só configuram a string do modelo (sem `extra_body`), o sufixo
+  `-agent` ativa o modo agente com os padrões do servidor (cwd = `AGENT_ROOT`).
+
+  Também requer `AGENT_MODE_ENABLED=true`. Um modelo desconhecido com `-agent`
+  (ex.: `gpt-4o-agent`) **não** ativa o modo agente.
+}

@@ -1,0 +1,55 @@
+meta {
+  name: 1. Via claude_options
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/v1/chat/completions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{gatewayKey}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "model": "sonnet",
+    "messages": [
+      {"role": "user", "content": "Crie um arquivo hello.txt com o texto: oi. Depois responda: pronto."}
+    ],
+    "claude_options": {
+      "mode": "agent",
+      "cwd": "meu-projeto",
+      "emit_tool_activity": true,
+      "max_turns": 20
+    }
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  # Modo agente via `claude_options`
+
+  Libera as ferramentas do Claude Code (rodar comandos, ler/escrever arquivos)
+  num diretório confinado. **Requer `AGENT_MODE_ENABLED=true`** no servidor —
+  senão retorna **403** `agent_mode_disabled`.
+
+  Campos de `claude_options`:
+  - `mode`: `"agent"`
+  - `cwd`: diretório relativo ao `AGENT_ROOT` (`/workspace`). Fora do root → 400.
+  - `emit_tool_activity`: mostra `> [tool: Write] ...` na resposta.
+  - `max_turns`, `permission_mode`, `max_budget_usd`, `timeout_seconds`.
+
+  Com `emit_tool_activity: true`, a resposta traz as ferramentas usadas seguidas
+  do texto final. O arquivo criado fica em `workspace/meu-projeto/hello.txt`.
+}

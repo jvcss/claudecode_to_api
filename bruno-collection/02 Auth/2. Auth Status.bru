@@ -1,0 +1,32 @@
+meta {
+  name: 2. Auth Status
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/auth/status
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminKey}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.configured: eq true
+}
+
+docs {
+  # GET /auth/status  (admin)
+
+  Mostra a credencial ativa (o token **nunca** é retornado, só o sufixo).
+
+  Campo `source`:
+  - `stored_oauth` / `stored_api_key` — token gravado via `/auth/token`
+  - `process_env` — variável de ambiente no processo
+  - `machine_login` — login de assinatura em `~/.claude` (modo dev)
+  - `none` — sem credencial (o chat vai falhar)
+}

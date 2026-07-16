@@ -1,0 +1,29 @@
+meta {
+  name: 1. List Models
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/v1/models
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{gatewayKey}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.object: eq list
+}
+
+docs {
+  # GET /v1/models  (cliente)
+
+  Lista os modelos no formato OpenAI. IDs válidos: aliases (`sonnet`, `opus`,
+  `haiku`, `fable`, `sonnet[1m]`, `opus[1m]`), IDs completos (`claude-sonnet-5`,
+  `claude-opus-4-8`, ...) e, se o modo agente estiver ligado, as variantes
+  `-agent`.
+}

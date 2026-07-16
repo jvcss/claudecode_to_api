@@ -1,0 +1,25 @@
+meta {
+  name: Health check
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/healthz
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq ok
+}
+
+docs {
+  # GET /healthz
+
+  Liveness do gateway. **Não exige autenticação.** Use para confirmar que o
+  serviço subiu antes de qualquer outra coisa.
+
+  Resposta esperada: `{"status": "ok", "version": "0.1.0"}`.
+}

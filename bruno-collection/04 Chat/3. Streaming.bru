@@ -1,0 +1,52 @@
+meta {
+  name: 3. Streaming (SSE)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/v1/chat/completions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{gatewayKey}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "model": "haiku",
+    "stream": true,
+    "stream_options": {"include_usage": true},
+    "messages": [
+      {"role": "user", "content": "Conte de 1 a 5, um número por linha."}
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  # Chat em streaming (Server-Sent Events)
+
+  Com `"stream": true`, a resposta vem como uma sequência de eventos `data:`.
+  O Bruno mostra o corpo bruto do stream (linhas `data: {...}`), terminando em
+  `data: [DONE]`.
+
+  Ordem dos eventos:
+  1. **role chunk** — `delta.role = "assistant"`
+  2. **content chunks** — um por pedaço de texto (`delta.content`)
+  3. **finish chunk** — `delta` vazio + `finish_reason`
+  4. **usage chunk** — só com `stream_options.include_usage: true` (`choices: []`)
+  5. **`data: [DONE]`**
+
+  Observação: o Bruno pode exibir o stream só ao final (não token a token). Para
+  ver token a token, use `curl -N` (veja `docs.md`).
+}

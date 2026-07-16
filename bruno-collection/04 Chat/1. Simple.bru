@@ -1,0 +1,44 @@
+meta {
+  name: 1. Simple
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/v1/chat/completions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{gatewayKey}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "model": "haiku",
+    "messages": [
+      {"role": "user", "content": "Explique o que é uma API em uma frase."}
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.object: eq chat.completion
+  res.body.choices[0].finish_reason: eq stop
+}
+
+docs {
+  # POST /v1/chat/completions  (cliente)
+
+  Chat compatível com a OpenAI, **sem streaming**. O gateway é stateless: mande
+  todo o histórico em `messages` a cada request.
+
+  A resposta é um objeto `chat.completion` com `choices[0].message.content` e o
+  `usage` (tokens). `prompt_tokens` inclui tokens de cache.
+}

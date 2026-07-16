@@ -1,0 +1,45 @@
+meta {
+  name: 2. With History
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/v1/chat/completions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{gatewayKey}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "model": "haiku",
+    "messages": [
+      {"role": "system", "content": "Responda em português, de forma concisa."},
+      {"role": "user", "content": "Meu nome é Alice."},
+      {"role": "assistant", "content": "Prazer, Alice!"},
+      {"role": "user", "content": "Qual é o meu nome?"}
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  # Chat com histórico (memória stateless)
+
+  Como o gateway não guarda estado, você reenvia o diálogo inteiro. As mensagens
+  `system` viram a instrução de sistema; as anteriores viram um bloco de
+  histórico; a última mensagem `user` é a pergunta atual.
+
+  A resposta deve mencionar **Alice**, provando que o histórico foi considerado.
+}

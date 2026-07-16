@@ -1,0 +1,28 @@
+meta {
+  name: 2. Get Default Model
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/config/model
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminKey}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  # GET /config/model  (admin)
+
+  Mostra o modelo padrão atual, usado quando o request não manda `model` (ou
+  manda um desconhecido, com `MODEL_STRICT=false`).
+
+  Resposta: `{"default_model": "sonnet"}`.
+}

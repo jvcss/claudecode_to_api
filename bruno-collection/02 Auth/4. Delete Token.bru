@@ -1,0 +1,29 @@
+meta {
+  name: 4. Delete Token
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/auth/token
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminKey}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  # DELETE /auth/token  (admin)
+
+  Remove o token gravado. O gateway volta a usar `process_env`/`machine_login`
+  se existirem; senão fica sem credencial. Para **rotacionar**, basta gravar um
+  novo token em `1. Set Token` (sobrescreve).
+
+  Resposta: `{"removed": true}`.
+}

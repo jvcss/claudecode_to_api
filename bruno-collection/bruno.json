@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "CCode Gateway (OpenAI-compat)",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

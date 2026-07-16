@@ -1,0 +1,38 @@
+meta {
+  name: 3. Set Default Model
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/config/model
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminKey}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "model": "sonnet"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.default_model: eq sonnet
+}
+
+docs {
+  # POST /config/model  (admin)
+
+  Define e persiste o modelo padrão (em `/data/config.json`, sobrevive a
+  reinícios). Um modelo desconhecido aqui retorna **400** (diferente do chat,
+  que cai no padrão).
+}

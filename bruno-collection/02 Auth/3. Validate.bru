@@ -1,0 +1,28 @@
+meta {
+  name: 3. Validate
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/auth/validate
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminKey}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  # POST /auth/validate  (admin)
+
+  Revalida a credencial ativa com um ping barato ao modelo (haiku). Útil para
+  checar se o token ainda funciona (ex.: suspeita de expiração).
+
+  Resposta: `{"valid": true, "error": null, "source": "stored_oauth"}`.
+}
