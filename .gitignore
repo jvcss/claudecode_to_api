@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+data/
+workspace/
+.env
+.pytest_cache/
+.DS_Store
+
+# Ambientes do Bruno guardam chaves locais — versione só os *.example
+bruno-collection/environments/*.bru
