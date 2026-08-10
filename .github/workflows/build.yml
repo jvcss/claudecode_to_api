@@ -1,0 +1,61 @@
+# Build e push da imagem via GitHub Actions, publicando no GHCR (GitHub Container Registry).
+#
+# Não é preciso configurar segredos manualmente: o login usa o GITHUB_TOKEN automático
+# do workflow (permissions.packages abaixo), que já tem push para os pacotes do repo/org.
+# Os runners hospedados pelo GitHub já vêm com Docker + buildx prontos.
+#
+# Deliberadamente NÃO publicamos :latest — o sync do CD é manual, e uma tag móvel
+# tornaria impossível saber qual imagem está de fato rodando. O Deployment pina o SHA.
+name: build-image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'requirements.txt'
+      - 'Dockerfile'
+      - '.github/workflows/build.yml'
+  workflow_dispatch: {}
+
+env:
+  REGISTRY: ghcr.io
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Nome da imagem (minúsculo, exigido pelo GHCR)
+        run: echo "IMAGE=${REGISTRY}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Login no GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
+
+      - name: Build e push
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_SHA::12}"
+          docker build --pull --platform linux/amd64 -t "$IMAGE:$TAG" .
+          docker push "$IMAGE:$TAG"
+          echo "Publicado: $IMAGE:$TAG"
+          echo "Atualize infra-gitops/ai/35-ccode.yaml com essa tag e sincronize a Application 'ai'."
+
+      - name: Confere que o CLI embutido ficou executável
+        # O wheel traz claude_agent_sdk/_bundled/claude com modo 0755; se o pip perder o bit
+        # de execução, o gateway falha só na primeira request. Barato conferir aqui.
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_SHA::12}"
+          docker run --rm --entrypoint sh "$IMAGE:$TAG" -c \
+            'p=$(python -c "import claude_agent_sdk,os;print(os.path.dirname(claude_agent_sdk.__file__))")/_bundled/claude; \
+             test -x "$p" || { echo "FATAL: $p nao e executavel"; exit 1; }; \
+             echo "OK: $p executavel ($(stat -c %a "$p"))"'
