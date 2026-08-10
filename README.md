@@ -53,7 +53,16 @@ loop —, maior a diferença entre pagar por token e pagar assinatura fixa.
 
 ```bash
 cp .env.example .env       # defina GATEWAY_API_KEYS e ADMIN_API_KEY!
+mkdir -p data workspace    # senão o Docker os cria como root e o container (uid 1000) não escreve
 docker compose up -d --build
+```
+
+Os bind mounts `./data` e `./workspace` precisam pertencer ao uid 1000 (o usuário
+`app` da imagem). Se o gateway subir com `PermissionError: [Errno 13] ... '/data/chat_cwd'`,
+corrija com:
+
+```bash
+sudo chown -R 1000:1000 data workspace
 ```
 
 A imagem também é publicada automaticamente no GHCR a cada push em `main`
