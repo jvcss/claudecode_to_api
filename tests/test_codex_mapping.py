@@ -67,6 +67,20 @@ def test_credencial_do_upstream_vira_502():
     assert err.code == "upstream_not_authenticated"
 
 
+# Mensagem REAL capturada do SDK sem credencial: chega como texto solto, sem
+# codex_error_info. Sem os marcadores viraria 500 e o operador não saberia que
+# o problema é a credencial.
+def test_401_sem_campo_estruturado_ainda_vira_502():
+    err = classify_run_error(
+        _turn_error(
+            message="unexpected status 401 Unauthorized: Missing bearer or basic "
+            "authentication in header, url: https://api.openai.com/v1/responses"
+        )
+    )
+    assert err.status_code == 502
+    assert err.code == "upstream_not_authenticated"
+
+
 def test_limite_de_uso_vira_429_com_retry_after():
     for info in ("usageLimitExceeded", "serverOverloaded"):
         err = classify_run_error(_turn_error(info))

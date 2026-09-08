@@ -233,6 +233,31 @@ def _map_usage(usage: Any) -> dict[str, Any]:
 
 _RATE_LIMIT_INFO = frozenset({"usageLimitExceeded", "serverOverloaded"})
 _AUTH_INFO = frozenset({"unauthorized"})
+
+# Nem todo erro chega com codex_error_info preenchido: uma falha de autenticação
+# real chega como texto solto ("unexpected status 401 Unauthorized: Missing
+# bearer or basic authentication in header"), sem campo estruturado. Sem estes
+# marcadores ela viraria 500, e o operador não saberia que o problema é a
+# credencial. Mesma técnica de claude_runner.classify_run_error.
+_AUTH_MARKERS = (
+    "unauthorized",
+    "status 401",
+    "status 403",
+    "missing bearer",
+    "not authenticated",
+    "authentication",
+    "please log in",
+    "invalid api key",
+)
+_RATE_LIMIT_MARKERS = (
+    "rate limit",
+    "rate_limit",
+    "usage limit",
+    "overloaded",
+    "too many requests",
+    "status 429",
+    "quota",
+)
 _CLIENT_FAULT_INFO = {
     "contextWindowExceeded": ("context_length_exceeded", "messages"),
     "badRequest": ("invalid_request", None),
@@ -271,10 +296,15 @@ def classify_run_error(err: Any) -> GatewayError:
     """
     message = str(getattr(err, "message", err) or "codex turn failed")
     detail = message[:300]
+    lowered = message.lower()
     info = _error_info_value(err)
     status = _http_status_from_info(err)
 
-    if info in _RATE_LIMIT_INFO or status in (429, 529):
+    if (
+        info in _RATE_LIMIT_INFO
+        or status in (429, 529)
+        or any(m in lowered for m in _RATE_LIMIT_MARKERS)
+    ):
         return GatewayError(
             429,
             f"Upstream Codex is rate limited or overloaded: {detail}",
@@ -282,7 +312,7 @@ def classify_run_error(err: Any) -> GatewayError:
             "upstream_rate_limited",
             headers={"Retry-After": "30"},
         )
-    if info in _AUTH_INFO or status in (401, 403):
+    if info in _AUTH_INFO or status in (401, 403) or any(m in lowered for m in _AUTH_MARKERS):
         return GatewayError(
             502,
             "The gateway's upstream Codex credential is invalid or expired. "
@@ -413,8 +443,8 @@ async def run_events(
 
     semaphore = providers.get_semaphore("openai", settings.codex_max_concurrency)
     async with semaphore:
-        client = await get_client(settings)
         try:
+            client = await get_client(settings)
             thread = await asyncio.wait_for(
                 client.thread_start(
                     model=options.model,
