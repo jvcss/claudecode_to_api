@@ -139,7 +139,7 @@ async def sse_stream(
             await events.aclose()  # type: ignore[attr-defined]
 
     if finish_reason == "error":
-        yield _sse(error_body("Claude run ended with an error.", "server_error", "claude_execution_error"))
+        yield _sse(error_body("Upstream run ended with an error.", "server_error", "upstream_execution_error"))
         yield "data: [DONE]\n\n"
         return
 
@@ -181,7 +181,7 @@ async def collect_completion(
             resolved_model = event[3] or resolved_model
 
     if finish_reason == "error":
-        raise GatewayError(500, "Claude run ended with an error.", "server_error", "claude_execution_error")
+        raise GatewayError(500, "Upstream run ended with an error.", "server_error", "upstream_execution_error")
 
     return {
         "id": completion_id,

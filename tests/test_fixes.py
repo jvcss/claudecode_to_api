@@ -60,7 +60,7 @@ def test_budget_clamped_to_server_cap():
     settings = Settings(agent_mode_enabled=True, max_budget_usd_per_request=1.0,
                         agent_root="/tmp", data_dir="/tmp/gwtest_data")
     co = ClaudeOptionsExt(mode="agent", max_budget_usd=999.0, cwd="/tmp")
-    opts = build_options("agent", "sonnet", None, co, {}, settings)
+    opts = build_options("agent", "sonnet", None, co, settings)
     assert opts.max_budget_usd == 1.0  # cliente pediu 999, teto é 1.0
 
 
@@ -70,7 +70,7 @@ def test_agent_mode_uses_preset_without_system():
     from app.claude_runner import build_options
 
     settings = Settings(agent_mode_enabled=True, agent_root="/tmp", data_dir="/tmp/gwtest_data")
-    opts = build_options("agent", "sonnet", None, None, {}, settings)
+    opts = build_options("agent", "sonnet", None, None, settings)
     assert isinstance(opts.system_prompt, dict)
     assert opts.system_prompt.get("preset") == "claude_code"
     assert "append" not in opts.system_prompt

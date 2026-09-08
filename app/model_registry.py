@@ -31,6 +31,16 @@ def is_known(model: str) -> bool:
     return model in ALIASES or model in KNOWN_FULL or bool(CLAUDE_ID_RE.match(model))
 
 
+def owner_of(model: str) -> str:
+    """Provider dono do modelo, no vocabulário do campo `owned_by` da OpenAI.
+
+    Enquanto só existe um provider, tudo é da Anthropic; o catálogo do Codex
+    estende esta função com uma allowlist exata (nunca um regex `gpt-*`, que
+    capturaria ids que hoje caem no modelo padrão).
+    """
+    return "anthropic"
+
+
 def parse_model(
     requested: str | None,
     default_model: str,
