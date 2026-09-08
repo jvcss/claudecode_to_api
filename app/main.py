@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from . import codex_catalog
 from .config import GATEWAY_VERSION, get_settings
 from .credentials import CredentialStore
 from .errors import GatewayError, error_body, error_response
@@ -21,6 +22,11 @@ async def lifespan(app: FastAPI):
     logging.basicConfig(level=settings.log_level.upper())
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.chat_cwd.mkdir(parents=True, exist_ok=True)
+
+    codex_catalog.configure(settings)
+    if settings.codex_enabled:
+        settings.codex_home.mkdir(parents=True, exist_ok=True)
+        settings.codex_chat_cwd.mkdir(parents=True, exist_ok=True)
 
     if not settings.gateway_keys:
         logger.warning(

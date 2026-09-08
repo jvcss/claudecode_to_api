@@ -3,4 +3,8 @@ uvicorn[standard]>=0.30
 # Pinado: o wheel embute o CLI do Claude Code (binário estático de 257 MB). Sem pin,
 # um rebuild traz outro CLI — perde reprodutibilidade e invalida o cache de layer.
 claude-agent-sdk==0.2.114
+# Mesmo caso: o wheel puxa openai-codex-cli-bin, que embute o binário do Codex
+# (~123 MB no manylinux x86_64). Pinado pela mesma razão — reprodutibilidade e
+# cache de layer.
+openai-codex==0.147.0
 pydantic-settings>=2.4

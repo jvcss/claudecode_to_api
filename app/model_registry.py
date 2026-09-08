@@ -6,6 +6,7 @@ import tempfile
 import os
 from pathlib import Path
 
+from . import codex_catalog
 from .errors import GatewayError
 
 logger = logging.getLogger("gateway.models")
@@ -28,17 +29,21 @@ _MODELS_CREATED = 1751328000  # timestamp estático para o campo `created`
 
 
 def is_known(model: str) -> bool:
+    if model in codex_catalog.ids():
+        return True
     return model in ALIASES or model in KNOWN_FULL or bool(CLAUDE_ID_RE.match(model))
 
 
 def owner_of(model: str) -> str:
     """Provider dono do modelo, no vocabulário do campo `owned_by` da OpenAI.
 
-    Enquanto só existe um provider, tudo é da Anthropic; o catálogo do Codex
-    estende esta função com uma allowlist exata (nunca um regex `gpt-*`, que
-    capturaria ids que hoje caem no modelo padrão).
+    A adesão ao Codex é por allowlist EXATA vinda do catálogo — nunca um regex
+    `gpt-*`. Um regex capturaria `gpt-4o`, que hoje é desconhecido e cai no
+    modelo padrão (é o caso que o comentário de `parse_model` cita); ele
+    passaria a ser roteado ao Codex, que rejeita o id. Seria uma regressão
+    silenciosa disparada por upgrade de imagem, sem ação do usuário.
     """
-    return "anthropic"
+    return "openai" if model in codex_catalog.ids() else "anthropic"
 
 
 def parse_model(
@@ -71,12 +76,20 @@ def parse_model(
 def model_ids(agent_enabled: bool) -> list[str]:
     ids = ALIASES + KNOWN_FULL
     if agent_enabled:
+        # Sufixo -agent só para os aliases do Claude: o modo agente não existe
+        # para o Codex, e anunciá-lo daria 403 na primeira chamada.
         ids = ids + [f"{a}{AGENT_SUFFIX}" for a in ALIASES if "[" not in a]
-    return ids
+    return ids + sorted(codex_catalog.ids())
 
 
 def model_object(model_id: str) -> dict:
-    return {"id": model_id, "object": "model", "created": _MODELS_CREATED, "owned_by": "anthropic"}
+    base = model_id[: -len(AGENT_SUFFIX)] if model_id.endswith(AGENT_SUFFIX) else model_id
+    return {
+        "id": model_id,
+        "object": "model",
+        "created": _MODELS_CREATED,
+        "owned_by": owner_of(base),
+    }
 
 
 class ConfigStore:

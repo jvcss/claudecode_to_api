@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     # CLI (opcional; por padrão o SDK usa o binário embutido no wheel)
     claude_cli_path: str | None = None
 
+    # Provider OpenAI/Codex (assinatura ChatGPT)
+    codex_enabled: bool = False
+    codex_max_concurrency: int = 3
+    codex_reasoning_effort: str = "medium"
+
     cors_origins: str = ""
     log_level: str = "info"
 
@@ -59,6 +64,23 @@ class Settings(BaseSettings):
     @property
     def config_path(self) -> Path:
         return self.data_dir / "config.json"
+
+    @property
+    def codex_home(self) -> Path:
+        """CODEX_HOME próprio, isolado do ~/.codex do host.
+
+        O refresh token do Codex é rotativo e de uso único: compartilhar este
+        diretório com outro processo que também roda `codex` invalida os dois.
+        """
+        return self.data_dir / "codex"
+
+    @property
+    def codex_chat_cwd(self) -> Path:
+        return self.data_dir / "codex_cwd"
+
+    @property
+    def codex_models_path(self) -> Path:
+        return self.data_dir / "codex_models.json"
 
 
 @lru_cache
