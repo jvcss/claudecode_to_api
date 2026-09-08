@@ -31,7 +31,12 @@ def runner_for(model: str):
     Import tardio: os runners importam este módulo para pegar o próprio
     semáforo, então um import no topo criaria ciclo.
     """
+    if owner_of(model) == "openai":
+        # Import só aqui: puxa o openai-codex (e o binário embutido). Quem usa
+        # apenas o Claude nunca paga esse custo.
+        from . import codex_runner
+
+        return codex_runner
     from . import claude_runner
 
-    runners = {"anthropic": claude_runner}
-    return runners[owner_of(model)]
+    return claude_runner

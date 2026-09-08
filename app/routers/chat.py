@@ -85,9 +85,16 @@ async def chat_completions(body: ChatCompletionRequest, request: Request):
         mode = "chat"
 
     system_text, prompt = build_prompt(body.messages)
-    system_text = _system_with_response_format(system_text, body)
     runner = providers.runner_for(model)
-    options = runner.build_options(mode, model, system_text, co, settings)
+    if getattr(runner, "NATIVE_JSON_SCHEMA", False):
+        # O provider aceita o schema no próprio turno; pedir JSON por prompt
+        # seria menos confiável.
+        options = runner.build_options(
+            mode, model, system_text, co, settings, response_format=body.response_format
+        )
+    else:
+        system_text = _system_with_response_format(system_text, body)
+        options = runner.build_options(mode, model, system_text, co, settings)
 
     if body.user:
         logger.info("chat_completions user=%s mode=%s model=%s", body.user, mode, model)
