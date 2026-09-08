@@ -1,0 +1,4 @@
+# pytest era dependência de dev não declarada; os testes são todos de função
+# pura, então nada além disso é necessário.
+-r requirements.txt
+pytest>=8.0

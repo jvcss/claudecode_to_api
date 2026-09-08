@@ -129,19 +129,25 @@ class CodexOptions:
     output_schema: dict[str, Any] | None
 
 
+# Snapshot dos membros declarados, tirado no import: ReasoningEffort tem um
+# hook `_missing_` que ACEITA qualquer string (compatibilidade com efforts que o
+# servidor venha a adicionar), então `ReasoningEffort(x)` nunca levanta e não
+# serve como validação — um valor errado só falharia lá no upstream.
+_KNOWN_EFFORTS = frozenset(e.value for e in ReasoningEffort)
+
+
 def _resolve_effort(settings: Settings) -> ReasoningEffort | None:
     raw = (settings.codex_reasoning_effort or "").strip()
     if not raw:
         return None
-    try:
-        return ReasoningEffort(raw)
-    except ValueError:
+    if raw not in _KNOWN_EFFORTS:
         logger.warning(
             "CODEX_REASONING_EFFORT=%r inválido; use um de %s. Usando o padrão do modelo.",
             raw,
-            [e.value for e in ReasoningEffort],
+            sorted(_KNOWN_EFFORTS),
         )
         return None
+    return ReasoningEffort(raw)
 
 
 def build_options(
@@ -248,7 +254,7 @@ def _http_status_from_info(err: Any) -> int | None:
     root = getattr(info, "root", None) if info is not None else None
     if root is None or isinstance(_value(root), str):
         return None
-    for field in getattr(root, "model_fields", {}):
+    for field in getattr(type(root), "model_fields", {}):
         nested = getattr(root, field, None)
         status = getattr(nested, "http_status_code", None)
         if status is not None:
