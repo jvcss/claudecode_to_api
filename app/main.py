@@ -1,5 +1,7 @@
 """App factory do gateway Claude Code → API compatível com OpenAI."""
+import asyncio
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -24,9 +26,19 @@ async def lifespan(app: FastAPI):
     settings.chat_cwd.mkdir(parents=True, exist_ok=True)
 
     codex_catalog.configure(settings)
+    executor: ThreadPoolExecutor | None = None
     if settings.codex_enabled:
         settings.codex_home.mkdir(parents=True, exist_ok=True)
         settings.codex_chat_cwd.mkdir(parents=True, exist_ok=True)
+        # O AsyncCodex é um wrapper asyncio.to_thread sobre o client síncrono, e
+        # cada turn em voo prende uma worker thread num queue.Queue.get() sem
+        # timeout. O executor default é min(32, cpu+4) — num container de 2
+        # vCPUs, 6 threads: poucos streams simultâneos o esgotariam, e junto
+        # com ele qualquer outro to_thread do processo.
+        executor = ThreadPoolExecutor(
+            max_workers=settings.codex_max_concurrency * 2 + 8, thread_name_prefix="gw"
+        )
+        asyncio.get_running_loop().set_default_executor(executor)
 
     if not settings.gateway_keys:
         logger.warning(
@@ -60,7 +72,15 @@ async def lifespan(app: FastAPI):
                 "Provider Codex habilitado sem credencial. "
                 "Rode POST /codex/auth/device-code para autenticar."
             )
-    yield
+    try:
+        yield
+    finally:
+        if settings.codex_enabled:
+            from . import codex_runner
+
+            await codex_runner.reset_client()
+        if executor is not None:
+            executor.shutdown(wait=False, cancel_futures=True)
 
 
 def create_app() -> FastAPI:
