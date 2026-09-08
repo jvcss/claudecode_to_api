@@ -7,11 +7,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from . import codex_catalog
+from . import codex_catalog, codex_credentials
 from .config import GATEWAY_VERSION, get_settings
 from .credentials import CredentialStore
 from .errors import GatewayError, error_body, error_response
-from .routers import admin, auth, chat, models
+from .routers import admin, auth, chat, codex_auth, models
 
 logger = logging.getLogger("gateway")
 
@@ -45,6 +45,21 @@ async def lifespan(app: FastAPI):
         )
     else:
         logger.info("Credencial do Claude Code ativa: %s", source)
+
+    if settings.codex_enabled:
+        codex_status = codex_credentials.status(settings)
+        if codex_status["configured"]:
+            logger.info(
+                "Credencial do Codex ativa: %s (%s), %d modelos em cache",
+                codex_status.get("account_id") or "?",
+                codex_status.get("plan") or "?",
+                len(codex_catalog.ids()),
+            )
+        else:
+            logger.warning(
+                "Provider Codex habilitado sem credencial. "
+                "Rode POST /codex/auth/device-code para autenticar."
+            )
     yield
 
 
@@ -87,6 +102,7 @@ def create_app() -> FastAPI:
     app.include_router(models.router)
     app.include_router(auth.router)
     app.include_router(admin.router)
+    app.include_router(codex_auth.router)
 
     @app.get("/healthz")
     async def healthz():
