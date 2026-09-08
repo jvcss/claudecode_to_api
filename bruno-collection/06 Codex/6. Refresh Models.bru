@@ -1,0 +1,30 @@
+meta {
+  name: 6. Refresh Models
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/codex/models/refresh
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminKey}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  # POST /codex/models/refresh  (admin)
+
+  Redescobre o catálogo de modelos e reescreve `data/codex_models.json`.
+
+  Os ids do Codex não são fixos no código porque são aposentados rápido
+  (`gpt-5-codex` e `gpt-5.4` já saíram). O catálogo é atualizado sozinho depois
+  de cada login; esta rota é para quando a OpenAI publica um modelo novo e você
+  não quer esperar o próximo login.
+}

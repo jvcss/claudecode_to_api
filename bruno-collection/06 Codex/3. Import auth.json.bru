@@ -1,0 +1,52 @@
+meta {
+  name: 3. Import auth.json
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/codex/auth/import
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminKey}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "auth_json": {
+      "auth_mode": "chatgpt",
+      "tokens": {
+        "id_token": "COLE_AQUI",
+        "access_token": "COLE_AQUI",
+        "refresh_token": "COLE_AQUI",
+        "account_id": "COLE_AQUI"
+      }
+    }
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.stored: eq true
+}
+
+docs {
+  # POST /codex/auth/import  (admin)
+
+  Plano B do login: rode `codex login` na sua máquina e cole aqui o conteúdo de
+  `~/.codex/auth.json`.
+
+  ⚠️ Depois de importar, **pare de usar o `codex` naquela máquina com essa mesma
+  cadeia de tokens**. O `refresh_token` do Codex é rotativo e de uso único: os
+  dois lados se invalidam e será preciso refazer o login.
+
+  Pela mesma razão, duas réplicas do gateway não podem compartilhar o volume
+  `/data`.
+}

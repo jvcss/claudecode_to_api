@@ -383,6 +383,90 @@ anterior).
 
 ---
 
+## Passo 6 — Backend OpenAI/Codex (assinatura ChatGPT)
+
+Opcional. Só vale a pena se você tem uma assinatura ChatGPT Plus/Pro/Business e
+quer usá-la pelas mesmas ferramentas. Suba com `CODEX_ENABLED=true`.
+
+### 6.1 Autenticar (device code)
+
+Não existe equivalente do `claude setup-token` para o plano de consumidor: o
+caminho headless é o *device code*.
+
+```bash
+curl -s -X POST "$BASE/codex/auth/device-code" \
+  -H "Authorization: Bearer $ADMIN_KEY"
+```
+
+```json
+{
+  "login_id": "...",
+  "verification_url": "https://auth.openai.com/activate",
+  "user_code": "ABCD-EFGH",
+  "next": "Abra a URL, informe o user_code e acompanhe em GET /codex/auth/status."
+}
+```
+
+Abra a URL no navegador da **sua** máquina, informe o `user_code` e acompanhe:
+
+```bash
+curl -s "$BASE/codex/auth/status" -H "Authorization: Bearer $ADMIN_KEY"
+```
+
+```json
+{
+  "configured": true,
+  "source": "auth_json",
+  "auth_mode": "chatgpt",
+  "account_id": "...",
+  "email": "voce@exemplo.com",
+  "plan": "plus",
+  "enabled": true,
+  "pending_login": false,
+  "models_cached": 6
+}
+```
+
+### 6.2 Alternativa: importar um `auth.json`
+
+Se o device code estiver desabilitado no seu workspace, rode `codex login` na sua
+máquina e importe o resultado:
+
+```bash
+curl -s -X POST "$BASE/codex/auth/import" \
+  -H "Authorization: Bearer $ADMIN_KEY" -H "Content-Type: application/json" \
+  -d "{\"auth_json\": $(cat ~/.codex/auth.json)}"
+```
+
+> Depois de importar, **pare de usar o `codex` naquela máquina com essa mesma
+> cadeia de tokens**. O `refresh_token` é rotativo e de uso único: os dois lados
+> se invalidam e será preciso refazer o login.
+
+### 6.3 Conversar
+
+Os modelos entram sozinhos em `/v1/models` assim que a credencial existe. Daí em
+diante é o mesmo endpoint de sempre — só muda o `model`:
+
+```bash
+curl -s "$BASE/v1/chat/completions" \
+  -H "Authorization: Bearer $GW_KEY" -H 'Content-Type: application/json' \
+  -d '{"model":"gpt-5.6-sol","messages":[{"role":"user","content":"Olá!"}]}'
+```
+
+Para redescobrir o catálogo depois de a OpenAI publicar modelos novos:
+
+```bash
+curl -s -X POST "$BASE/codex/models/refresh" -H "Authorization: Bearer $ADMIN_KEY"
+```
+
+### 6.4 Encerrar
+
+```bash
+curl -s -X DELETE "$BASE/codex/auth/token" -H "Authorization: Bearer $ADMIN_KEY"
+```
+
+---
+
 ## Referência rápida dos erros
 
 | HTTP | `code` | Quando |
@@ -390,6 +474,9 @@ anterior).
 | 400 | `images_not_supported` | Mandou conteúdo de imagem/áudio |
 | 400 | `unsupported_message_role` | Usou role `tool`/`function` |
 | 400 | `unsupported_parameter` | Mandou `n` > 1 |
+| 400 | `context_length_exceeded` | (Codex) Histórico maior que a janela do modelo |
+| 403 | `agent_mode_unsupported_for_provider` | Pediu modo agente num modelo do Codex |
+| 403 | `codex_disabled` | Rota `/codex/*` com `CODEX_ENABLED=false` |
 | 400 | `tools_not_supported` | Mandou `tools`/`tool_choice`/`functions` (function-calling do cliente) |
 | 400 | `invalid_cwd` | `claude_options.cwd` fora do `AGENT_ROOT` |
 | 401 | `invalid_api_key` | Chave do gateway (Bearer) errada ou ausente |

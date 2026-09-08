@@ -1,0 +1,27 @@
+meta {
+  name: 4. Validate
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/codex/auth/validate
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminKey}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  # POST /codex/auth/validate  (admin)
+
+  Confere se a credencial autentica. Diferente do `/auth/validate` do lado
+  Claude — que roda uma query com haiku e portanto **gasta tokens** —, este usa
+  `account()`, que não consome cota.
+}

@@ -1,0 +1,48 @@
+meta {
+  name: 5. Chat
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/v1/chat/completions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{gatewayKey}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "model": "{{codexModel}}",
+    "messages": [
+      {"role": "user", "content": "Explique o que é uma API em uma frase."}
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.object: eq chat.completion
+  res.body.choices[0].finish_reason: eq stop
+}
+
+docs {
+  # POST /v1/chat/completions com um modelo do Codex  (cliente)
+
+  Mesmo endpoint de sempre: quem escolhe o backend é o campo `model`. Rode
+  **03 Models e Config → 1. List Models** para ver os ids disponíveis e ajuste
+  a variável de ambiente `codexModel`.
+
+  Diferenças em relação ao backend Claude:
+
+  - `response_format` com `json_schema` é nativo (vai no próprio turno).
+  - Modo agente responde 403 `agent_mode_unsupported_for_provider`.
+  - `usage` não inclui custo: o Codex não reporta USD por request.
+}

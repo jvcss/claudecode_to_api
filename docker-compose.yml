@@ -5,7 +5,7 @@ services:
       - "8099:8000"
     env_file: .env
     volumes:
-      - ./data:/data            # token, config e chat_cwd — sobrevivem a restarts
+      - ./data:/data            # tokens (Claude e Codex), config e cwds — sobrevivem a restarts
       - ./workspace:/workspace  # raiz de trabalho do modo agente
       # Opcional (somente dev): reusar o login de assinatura da máquina.
       # Em VPS prefira `claude setup-token` + POST /auth/token.
