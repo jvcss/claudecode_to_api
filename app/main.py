@@ -18,6 +18,21 @@ from .routers import admin, auth, chat, codex_auth, models
 logger = logging.getLogger("gateway")
 
 
+async def _warm_catalog(settings) -> None:
+    """Descobre o catálogo de modelos do Codex. Best-effort: falhar aqui não
+    pode impedir o gateway de servir o backend Claude."""
+    from . import codex_runner
+
+    try:
+        await codex_catalog.refresh(await codex_runner.get_client(settings))
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "Não foi possível descobrir os modelos do Codex no boot; "
+            "use POST /codex/models/refresh.",
+            exc_info=True,
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
@@ -58,6 +73,7 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Credencial do Claude Code ativa: %s", source)
 
+    warmup: asyncio.Task | None = None
     if settings.codex_enabled:
         codex_status = codex_credentials.status(settings)
         if codex_status["configured"]:
@@ -67,6 +83,15 @@ async def lifespan(app: FastAPI):
                 codex_status.get("plan") or "?",
                 len(codex_catalog.ids()),
             )
+            if not codex_catalog.ids():
+                # Cache vazio com credencial presente = login feito por fora do
+                # gateway (pelo CLI embutido, por exemplo). Sem isto, os ids do
+                # Codex seguiriam desconhecidos até alguém chamar
+                # /codex/models/refresh na mão.
+                #
+                # Em background: subir o app-server leva alguns segundos, e o
+                # readiness probe não deve esperar por isso.
+                warmup = asyncio.ensure_future(_warm_catalog(settings))
         else:
             logger.warning(
                 "Provider Codex habilitado sem credencial. "
@@ -75,6 +100,8 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        if warmup is not None and not warmup.done():
+            warmup.cancel()
         if settings.codex_enabled:
             from . import codex_runner
 
