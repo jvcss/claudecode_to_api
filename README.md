@@ -114,25 +114,47 @@ OpenAI. Nenhum cliente precisa saber disso.
 Vem **desligado**. Com `CODEX_ENABLED=false` o roteamento e o `/v1/models`
 respondem exatamente como antes deste backend existir.
 
+### Autenticar
+
+Ao contrário do lado Claude, **não existe uma chave para gerar**: o
+`claude setup-token` produz um token longo de colar, e o ChatGPT não tem
+equivalente para plano de consumidor. O que existe é um `auth.json` com
+`refresh_token` **rotativo**, obtido por OAuth e renovado sozinho.
+
+Você não precisa instalar nada — o CLI do Codex já vem embutido na imagem:
+
 ```bash
-# 1. Ligue o provider e suba
+# 1. Login pelo binário embutido (device code: nenhum navegador no servidor)
+docker compose exec -e CODEX_HOME=/data/codex gateway \
+  /usr/local/lib/python3.13/site-packages/codex_cli_bin/bin/codex login --device-auth
+```
+
+Ele imprime uma URL e um código de uso único. Abra a URL no navegador da **sua**
+máquina, informe o código, e o `auth.json` é gravado em `./data/codex/` — no
+volume, sobrevivendo a restarts, exatamente onde o gateway lê.
+
+```bash
+# 2. Ligue o provider e recrie o container
 echo "CODEX_ENABLED=true" >> .env
 docker compose up -d --build
 
-# 2. Login (não existe equivalente ao `claude setup-token`: o caminho é device code)
-curl -X POST http://SEU_HOST:8099/codex/auth/device-code \
-  -H "Authorization: Bearer $ADMIN_API_KEY"
-# → {"verification_url": "https://...", "user_code": "ABCD-EFGH", ...}
-# Abra a URL no seu navegador, informe o user_code, e acompanhe:
-curl -s http://SEU_HOST:8099/codex/auth/status -H "Authorization: Bearer $ADMIN_API_KEY"
-
-# 3. Os modelos aparecem sozinhos
+# 3. Os modelos aparecem sozinhos (o catálogo é descoberto no boot)
 curl -s http://SEU_HOST:8099/v1/models -H "Authorization: Bearer $GATEWAY_API_KEY"
 ```
 
-O device code é **beta** e pode estar desabilitado nas *security settings* do seu
-workspace ChatGPT. Nesse caso, rode `codex login` na sua máquina e importe o
-resultado:
+**Sem shell no host?** A mesma coisa pela rota admin, útil num VPS gerenciado
+por outra pessoa. Exige `CODEX_ENABLED=true` antes:
+
+```bash
+curl -X POST http://SEU_HOST:8099/codex/auth/device-code \
+  -H "Authorization: Bearer $ADMIN_API_KEY"
+# → {"verification_url": "https://...", "user_code": "ABCD-EFGH", ...}
+curl -s http://SEU_HOST:8099/codex/auth/status -H "Authorization: Bearer $ADMIN_API_KEY"
+```
+
+**Device code bloqueado?** Ele é *beta* e pode estar desabilitado nas *security
+settings* do seu workspace ChatGPT. Nesse caso rode `codex login` na sua máquina
+(fluxo de navegador em `localhost:1455`) e importe o resultado:
 
 ```bash
 curl -X POST http://SEU_HOST:8099/codex/auth/import \
@@ -406,5 +428,9 @@ pip install -r requirements-dev.txt && pytest -q
 - No backend Codex: sem modo agente, sem custo por request, e o `refresh_token`
   rotativo impede compartilhar o volume `/data` entre réplicas (ver a seção do
   backend acima).
+- O Codex manda o próprio system prompt em toda requisição: medimos ~13,9k
+  tokens de entrada para responder `ok` (com ~8,9k vindos de cache). Não dá para
+  desligar pelo SDK — em uso intenso, os créditos caem bem mais rápido do que o
+  tamanho das suas mensagens sugere.
 
 Guia completo de uso via `curl`, endpoint por endpoint: [docs.md](docs.md).

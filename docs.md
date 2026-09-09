@@ -390,8 +390,20 @@ quer usá-la pelas mesmas ferramentas. Suba com `CODEX_ENABLED=true`.
 
 ### 6.1 Autenticar (device code)
 
-Não existe equivalente do `claude setup-token` para o plano de consumidor: o
-caminho headless é o *device code*.
+Não existe equivalente do `claude setup-token` para o plano de consumidor: não
+há token longo de copiar e colar. O caminho headless é o *device code*, e o CLI
+do Codex já vem embutido na imagem — não precisa instalar nada:
+
+```bash
+docker compose exec -e CODEX_HOME=/data/codex gateway \
+  /usr/local/lib/python3.13/site-packages/codex_cli_bin/bin/codex login --device-auth
+```
+
+Abra a URL que ele imprime, informe o código, e o `auth.json` é gravado em
+`./data/codex/`. Pule para o 6.3.
+
+Se você não tem shell no host (VPS gerenciado por outra pessoa), a rota admin
+faz o mesmo — mas exige `CODEX_ENABLED=true` antes:
 
 ```bash
 curl -s -X POST "$BASE/codex/auth/device-code" \
