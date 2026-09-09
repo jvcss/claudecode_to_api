@@ -3,4 +3,5 @@ vars {
   gatewayKey: troque-esta-chave
   adminKey: troque-esta-chave-admin
   claudeToken: sk-ant-oat01-COLE_SEU_TOKEN_AQUI
+  codexModel: gpt-5.6-sol
 }

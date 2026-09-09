@@ -1,0 +1,26 @@
+meta {
+  name: 7. Delete Token
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{baseUrl}}/codex/auth/token
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminKey}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  # DELETE /codex/auth/token  (admin)
+
+  Apaga o `auth.json` do Codex e derruba o app-server (que lê a credencial na
+  inicialização). O backend Claude não é afetado.
+}

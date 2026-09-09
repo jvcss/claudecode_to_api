@@ -74,3 +74,17 @@ class SetModelRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     model: str = Field(min_length=1)
+
+
+class CodexImportRequest(BaseModel):
+    """Conteúdo de um ~/.codex/auth.json produzido por `codex login`."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    auth_json: dict[str, Any]
+
+
+class CodexApiKeyRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    api_key: str = Field(min_length=8)

@@ -1,0 +1,36 @@
+meta {
+  name: 1. Device Code
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/codex/auth/device-code
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminKey}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  # POST /codex/auth/device-code  (admin)
+
+  Inicia o login na sua assinatura ChatGPT. Não existe equivalente do
+  `claude setup-token` para o plano de consumidor — o caminho headless é o
+  *device code*.
+
+  Resposta: `{"verification_url": "...", "user_code": "ABCD-EFGH", ...}`.
+
+  Abra a `verification_url` no navegador da **sua** máquina, informe o
+  `user_code`, e acompanhe em **2. Auth Status** até `configured: true`.
+
+  Exige `CODEX_ENABLED=true`; senão responde 403 `codex_disabled`. O device
+  code é beta e pode estar desabilitado nas security settings do workspace —
+  nesse caso use **3. Import auth.json**.
+}

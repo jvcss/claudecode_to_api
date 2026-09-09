@@ -1,0 +1,30 @@
+meta {
+  name: 2. Auth Status
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/codex/auth/status
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminKey}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  # GET /codex/auth/status  (admin)
+
+  Estado da credencial do Codex. Nunca devolve tokens.
+
+  - `configured: false` → ainda não autenticado (veja **1. Device Code**).
+  - `pending_login: true` → login iniciado, aguardando você no navegador.
+  - `models_cached` → quantos modelos o catálogo já descobriu; enquanto for 0,
+    nenhum id do Codex é aceito em `/v1/chat/completions`.
+}

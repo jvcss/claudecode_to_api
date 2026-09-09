@@ -36,7 +36,7 @@ async def _validate(store: CredentialStore) -> tuple[bool, str | None]:
             "HOME": str(isolated),
             "CLAUDE_CONFIG_DIR": str(isolated),
         }
-    options = claude_runner.build_options("chat", "haiku", None, None, creds_env, settings)
+    options = claude_runner.build_options("chat", "haiku", None, None, settings, creds_env)
     try:
         events = claude_runner.run_events("ping", options, settings, timeout_seconds=60)
         try:

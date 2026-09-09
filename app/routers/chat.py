@@ -4,9 +4,8 @@ import logging
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from .. import claude_runner
+from .. import providers
 from ..config import get_settings
-from ..credentials import CredentialStore
 from ..errors import GatewayError
 from ..model_registry import AGENT_SUFFIX, ConfigStore, parse_model
 from ..openai_stream import collect_completion, sse_stream
@@ -72,7 +71,6 @@ def _system_with_response_format(system_text: str | None, body: ChatCompletionRe
 async def chat_completions(body: ChatCompletionRequest, request: Request):
     settings = get_settings()
     config = ConfigStore(settings.config_path, settings.default_model)
-    creds = CredentialStore(settings.credentials_path)
 
     _reject_unsupported(body)
 
@@ -87,15 +85,22 @@ async def chat_completions(body: ChatCompletionRequest, request: Request):
         mode = "chat"
 
     system_text, prompt = build_prompt(body.messages)
-    system_text = _system_with_response_format(system_text, body)
-    _, creds_env = creds.resolve()
-    options = claude_runner.build_options(mode, model, system_text, co, creds_env, settings)
+    runner = providers.runner_for(model)
+    if getattr(runner, "NATIVE_JSON_SCHEMA", False):
+        # O provider aceita o schema no próprio turno; pedir JSON por prompt
+        # seria menos confiável.
+        options = runner.build_options(
+            mode, model, system_text, co, settings, response_format=body.response_format
+        )
+    else:
+        system_text = _system_with_response_format(system_text, body)
+        options = runner.build_options(mode, model, system_text, co, settings)
 
     if body.user:
         logger.info("chat_completions user=%s mode=%s model=%s", body.user, mode, model)
 
     timeout = co.timeout_seconds if co else None
-    events = claude_runner.run_events(prompt, options, settings, timeout)
+    events = runner.run_events(prompt, options, settings, timeout)
     emit_tools = bool(co and co.emit_tool_activity)
 
     if body.stream:

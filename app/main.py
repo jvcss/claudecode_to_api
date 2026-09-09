@@ -1,5 +1,7 @@
 """App factory do gateway Claude Code → API compatível com OpenAI."""
+import asyncio
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -7,12 +9,28 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from . import codex_catalog, codex_credentials
 from .config import GATEWAY_VERSION, get_settings
 from .credentials import CredentialStore
 from .errors import GatewayError, error_body, error_response
-from .routers import admin, auth, chat, models
+from .routers import admin, auth, chat, codex_auth, models
 
 logger = logging.getLogger("gateway")
+
+
+async def _warm_catalog(settings) -> None:
+    """Descobre o catálogo de modelos do Codex. Best-effort: falhar aqui não
+    pode impedir o gateway de servir o backend Claude."""
+    from . import codex_runner
+
+    try:
+        await codex_catalog.refresh(await codex_runner.get_client(settings))
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "Não foi possível descobrir os modelos do Codex no boot; "
+            "use POST /codex/models/refresh.",
+            exc_info=True,
+        )
 
 
 @asynccontextmanager
@@ -21,6 +39,21 @@ async def lifespan(app: FastAPI):
     logging.basicConfig(level=settings.log_level.upper())
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.chat_cwd.mkdir(parents=True, exist_ok=True)
+
+    codex_catalog.configure(settings)
+    executor: ThreadPoolExecutor | None = None
+    if settings.codex_enabled:
+        settings.codex_home.mkdir(parents=True, exist_ok=True)
+        settings.codex_chat_cwd.mkdir(parents=True, exist_ok=True)
+        # O AsyncCodex é um wrapper asyncio.to_thread sobre o client síncrono, e
+        # cada turn em voo prende uma worker thread num queue.Queue.get() sem
+        # timeout. O executor default é min(32, cpu+4) — num container de 2
+        # vCPUs, 6 threads: poucos streams simultâneos o esgotariam, e junto
+        # com ele qualquer outro to_thread do processo.
+        executor = ThreadPoolExecutor(
+            max_workers=settings.codex_max_concurrency * 2 + 8, thread_name_prefix="gw"
+        )
+        asyncio.get_running_loop().set_default_executor(executor)
 
     if not settings.gateway_keys:
         logger.warning(
@@ -39,7 +72,42 @@ async def lifespan(app: FastAPI):
         )
     else:
         logger.info("Credencial do Claude Code ativa: %s", source)
-    yield
+
+    warmup: asyncio.Task | None = None
+    if settings.codex_enabled:
+        codex_status = codex_credentials.status(settings)
+        if codex_status["configured"]:
+            logger.info(
+                "Credencial do Codex ativa: %s (%s), %d modelos em cache",
+                codex_status.get("account_id") or "?",
+                codex_status.get("plan") or "?",
+                len(codex_catalog.ids()),
+            )
+            if not codex_catalog.ids():
+                # Cache vazio com credencial presente = login feito por fora do
+                # gateway (pelo CLI embutido, por exemplo). Sem isto, os ids do
+                # Codex seguiriam desconhecidos até alguém chamar
+                # /codex/models/refresh na mão.
+                #
+                # Em background: subir o app-server leva alguns segundos, e o
+                # readiness probe não deve esperar por isso.
+                warmup = asyncio.ensure_future(_warm_catalog(settings))
+        else:
+            logger.warning(
+                "Provider Codex habilitado sem credencial. "
+                "Rode POST /codex/auth/device-code para autenticar."
+            )
+    try:
+        yield
+    finally:
+        if warmup is not None and not warmup.done():
+            warmup.cancel()
+        if settings.codex_enabled:
+            from . import codex_runner
+
+            await codex_runner.reset_client()
+        if executor is not None:
+            executor.shutdown(wait=False, cancel_futures=True)
 
 
 def create_app() -> FastAPI:
@@ -81,6 +149,7 @@ def create_app() -> FastAPI:
     app.include_router(models.router)
     app.include_router(auth.router)
     app.include_router(admin.router)
+    app.include_router(codex_auth.router)
 
     @app.get("/healthz")
     async def healthz():

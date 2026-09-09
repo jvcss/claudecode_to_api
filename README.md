@@ -27,8 +27,12 @@ loop —, maior a diferença entre pagar por token e pagar assinatura fixa.
 
 ## Como funciona
 
-- Usa o [`claude-agent-sdk`](https://pypi.org/project/claude-agent-sdk/), que **embute o
-  CLI do Claude Code** no wheel — não precisa de Node.js.
+- **Dois backends, um protocolo.** O modelo pedido decide o upstream: aliases e ids
+  `claude-*` vão para o Claude Code; ids do catálogo do Codex vão para a sua
+  assinatura ChatGPT. O cliente não muda nada além do campo `model`.
+- Usa o [`claude-agent-sdk`](https://pypi.org/project/claude-agent-sdk/) e o
+  [`openai-codex`](https://pypi.org/project/openai-codex/), que **embutem os CLIs**
+  no wheel — não precisa de Node.js.
 - **Modo padrão = chat puro**: sem ferramentas, comportamento idêntico a um LLM de API.
 - **Modo agente (opt-in)**: ferramentas completas do Claude Code (Bash, arquivos, etc.)
   num diretório confinado.
@@ -47,6 +51,12 @@ loop —, maior a diferença entre pagar por token e pagar assinatura fixa.
 | DELETE | `/auth/token` | Admin | Remove o token gravado |
 | POST | `/auth/validate` | Admin | Re-valida a credencial (query barata com haiku) |
 | GET/POST | `/config/model` | Admin | Lê/define o modelo padrão |
+| POST | `/codex/auth/device-code` | Admin | Inicia o login do Codex (assinatura ChatGPT) |
+| GET | `/codex/auth/status` | Admin | Estado da credencial do Codex |
+| POST | `/codex/auth/import` | Admin | Grava um `auth.json` do `codex login` |
+| POST | `/codex/auth/validate` | Admin | Re-valida (barato: não gasta tokens) |
+| DELETE | `/codex/auth/token` | Admin | Remove a credencial do Codex |
+| POST | `/codex/models/refresh` | Admin | Redescobre o catálogo de modelos do Codex |
 | GET | `/healthz` | — | Liveness |
 
 ## Subindo com Docker (produção)
@@ -93,6 +103,97 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 ```
 
 Se a máquina já está logada no Claude Code (`~/.claude`), funciona sem token.
+
+## Backend OpenAI/Codex (assinatura ChatGPT)
+
+O gateway também expõe a sua assinatura **ChatGPT Plus/Pro/Business** através do
+Codex, no mesmo `/v1/chat/completions`. Quem escolhe o backend é o campo `model`:
+alias ou id `claude-*` vai para o Claude Code, id do catálogo do Codex vai para a
+OpenAI. Nenhum cliente precisa saber disso.
+
+Vem **desligado**. Com `CODEX_ENABLED=false` o roteamento e o `/v1/models`
+respondem exatamente como antes deste backend existir.
+
+### Autenticar
+
+Ao contrário do lado Claude, **não existe uma chave para gerar**: o
+`claude setup-token` produz um token longo de colar, e o ChatGPT não tem
+equivalente para plano de consumidor. O que existe é um `auth.json` com
+`refresh_token` **rotativo**, obtido por OAuth e renovado sozinho.
+
+Você não precisa instalar nada — o CLI do Codex já vem embutido na imagem:
+
+```bash
+# 1. Login pelo binário embutido (device code: nenhum navegador no servidor)
+docker compose exec -e CODEX_HOME=/data/codex gateway \
+  /usr/local/lib/python3.13/site-packages/codex_cli_bin/bin/codex login --device-auth
+```
+
+Ele imprime uma URL e um código de uso único. Abra a URL no navegador da **sua**
+máquina, informe o código, e o `auth.json` é gravado em `./data/codex/` — no
+volume, sobrevivendo a restarts, exatamente onde o gateway lê.
+
+```bash
+# 2. Ligue o provider e recrie o container
+echo "CODEX_ENABLED=true" >> .env
+docker compose up -d --build
+
+# 3. Os modelos aparecem sozinhos (o catálogo é descoberto no boot)
+curl -s http://SEU_HOST:8099/v1/models -H "Authorization: Bearer $GATEWAY_API_KEY"
+```
+
+**Sem shell no host?** A mesma coisa pela rota admin, útil num VPS gerenciado
+por outra pessoa. Exige `CODEX_ENABLED=true` antes:
+
+```bash
+curl -X POST http://SEU_HOST:8099/codex/auth/device-code \
+  -H "Authorization: Bearer $ADMIN_API_KEY"
+# → {"verification_url": "https://...", "user_code": "ABCD-EFGH", ...}
+curl -s http://SEU_HOST:8099/codex/auth/status -H "Authorization: Bearer $ADMIN_API_KEY"
+```
+
+**Device code bloqueado?** Ele é *beta* e pode estar desabilitado nas *security
+settings* do seu workspace ChatGPT. Nesse caso rode `codex login` na sua máquina
+(fluxo de navegador em `localhost:1455`) e importe o resultado:
+
+```bash
+curl -X POST http://SEU_HOST:8099/codex/auth/import \
+  -H "Authorization: Bearer $ADMIN_API_KEY" -H "Content-Type: application/json" \
+  -d "{\"auth_json\": $(cat ~/.codex/auth.json)}"
+```
+
+> O `refresh_token` do Codex é **rotativo e de uso único**. Depois de importar,
+> dê ao gateway um login só dele: se você continuar usando o `codex` na máquina
+> de origem com a mesma cadeia de tokens, os dois se invalidam e será preciso
+> refazer o login. Pela mesma razão, **duas réplicas não podem compartilhar o
+> mesmo volume `/data`** — use um volume por réplica, ou réplica única.
+
+Há ainda `POST /codex/auth/api-key`, que autentica com uma API key do console.
+⚠️ Isso **cobra por token e não usa a assinatura** — ou seja, anula o motivo de
+existir do gateway. Só use se for exatamente o que você quer.
+
+### Modelos e limites
+
+Os ids não são fixos no código: o catálogo é descoberto pelo SDK e cacheado em
+`data/codex_models.json`, porque os modelos do Codex são aposentados rápido
+(`gpt-5-codex` e `gpt-5.4` já saíram). Use `POST /codex/models/refresh` para
+redescobrir.
+
+O que **não** funciona neste backend, e por quê:
+
+- **Modo agente** → 403 `agent_mode_unsupported_for_provider`. O SDK não permite
+  negar aprovações de ferramenta (`deny_all` significa "não perguntar", não
+  "negar"), então habilitá-lo seria aceitação cega de escrita em disco. Use um
+  modelo Claude para modo agente.
+- **`max_budget_usd`** não tem equivalente: o Codex não reporta custo por
+  request. Os campos de `claude_options` ligados ao modo agente (`cwd`,
+  `max_turns`, `permission_mode`, `allowed_tools`) são ignorados aqui.
+- Em compensação, `response_format` com `json_schema` é **nativo** neste backend
+  — o schema vai no próprio turno, em vez de ser pedido por prompt. O gateway
+  normaliza o schema para o modo estrito da OpenAI (`additionalProperties:
+  false` e `required` com todas as propriedades), porque o upstream recusa
+  qualquer outra forma. **Efeito colateral:** campo opcional deixa de existir;
+  para manter um, declare `"type": ["string", "null"]`.
 
 ## Conecte suas ferramentas
 
@@ -290,6 +391,9 @@ Ver [.env.example](.env.example). As principais:
 | `ADMIN_API_KEY` | cai nas chaves do gateway | Chave dos endpoints admin |
 | `DEFAULT_MODEL` | `sonnet` | Modelo padrão |
 | `MAX_CONCURRENCY` | `3` | Requests simultâneos ao Claude (1 subprocesso cada) |
+| `CODEX_ENABLED` | `false` | Habilita o backend OpenAI/Codex |
+| `CODEX_MAX_CONCURRENCY` | `3` | Requests simultâneos ao Codex (contador próprio) |
+| `CODEX_REASONING_EFFORT` | `medium` | `none`…`xhigh`; vazio usa o padrão do modelo |
 | `REQUEST_TIMEOUT_SECONDS` | `300` | Teto por request |
 | `AGENT_MODE_ENABLED` | `false` | Habilita o modo agente |
 | `AGENT_ROOT` | `/workspace` | Raiz confinada do modo agente |
@@ -298,6 +402,16 @@ Ver [.env.example](.env.example). As principais:
 
 ```bash
 BASE_URL=http://localhost:8000 API_KEY=sua-chave ./scripts/smoke_test.sh
+
+# Inclui os testes do backend Codex (exige CODEX_ENABLED=true e credencial):
+CODEX_MODEL=gpt-5.6-sol BASE_URL=http://localhost:8000 API_KEY=sua-chave \
+  ./scripts/smoke_test.sh
+```
+
+Os testes unitários não precisam de credencial nenhuma:
+
+```bash
+pip install -r requirements-dev.txt && pytest -q
 ```
 
 ## Limitações conhecidas
@@ -309,5 +423,14 @@ BASE_URL=http://localhost:8000 API_KEY=sua-chave ./scripts/smoke_test.sh
 - Sem suporte a `tool_calls`/`function_calling` do lado do cliente — as ferramentas
   executam dentro do Claude Code (modo agente).
 - Uma resposta por request (`n=1`); `logprobs` sempre `null`.
+- A imagem embute os dois CLIs (~257 MB do Claude Code + ~123 MB do Codex), o que
+  a deixa em torno de 400 MB só de SDKs.
+- No backend Codex: sem modo agente, sem custo por request, e o `refresh_token`
+  rotativo impede compartilhar o volume `/data` entre réplicas (ver a seção do
+  backend acima).
+- O Codex manda o próprio system prompt em toda requisição: medimos ~13,9k
+  tokens de entrada para responder `ok` (com ~8,9k vindos de cache). Não dá para
+  desligar pelo SDK — em uso intenso, os créditos caem bem mais rápido do que o
+  tamanho das suas mensagens sugere.
 
 Guia completo de uso via `curl`, endpoint por endpoint: [docs.md](docs.md).

@@ -22,7 +22,9 @@ from claude_agent_sdk import (
 )
 from claude_agent_sdk.types import StreamEvent, ToolUseBlock
 
+from . import providers
 from .config import Settings
+from .credentials import CredentialStore
 from .errors import GatewayError, not_authenticated
 from .schemas import ClaudeOptionsExt
 
@@ -35,7 +37,6 @@ CHAT_BASE_PROMPT = (
 
 GwEvent = tuple[Any, ...]
 
-_semaphore: asyncio.Semaphore | None = None
 _cleanup_tasks: set[asyncio.Task] = set()
 
 
@@ -61,13 +62,6 @@ def _detach_cleanup(step: "asyncio.Task | None", agen: Any) -> None:
     task.add_done_callback(_cleanup_tasks.discard)
 
 
-def _get_semaphore(settings: Settings) -> asyncio.Semaphore:
-    global _semaphore
-    if _semaphore is None:
-        _semaphore = asyncio.Semaphore(settings.max_concurrency)
-    return _semaphore
-
-
 def resolve_agent_cwd(co: ClaudeOptionsExt | None, settings: Settings) -> str:
     root = settings.agent_root.resolve()
     requested = (co.cwd if co and co.cwd else None) or str(root)
@@ -90,9 +84,15 @@ def build_options(
     model: str,
     system_text: str | None,
     co: ClaudeOptionsExt | None,
-    creds_env: dict[str, str],
     settings: Settings,
+    creds_env: dict[str, str] | None = None,
 ) -> ClaudeAgentOptions:
+    # A credencial é resolvida aqui, não no router: injetar env no subprocesso é
+    # específico do Claude e não tem análogo nos outros providers. `creds_env`
+    # continua aceito como override para /auth/validate, que precisa isolar o
+    # subprocesso de um login pré-existente em ~/.claude.
+    if creds_env is None:
+        _, creds_env = CredentialStore(settings.credentials_path).resolve()
     common: dict[str, Any] = {
         "model": model,
         "include_partial_messages": True,
@@ -238,7 +238,7 @@ async def run_events(
             504, f"Upstream Claude run exceeded {timeout}s.", "timeout", "request_timeout"
         )
 
-    semaphore = _get_semaphore(settings)
+    semaphore = providers.get_semaphore("anthropic", settings.max_concurrency)
     async with semaphore:
         agen = query(prompt=prompt, options=options)
         sdk_iter = agen.__aiter__()

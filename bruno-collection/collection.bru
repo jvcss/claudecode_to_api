@@ -1,7 +1,8 @@
 docs {
   # CCode Gateway — Coleção Bruno
 
-  Testa o gateway que expõe o **Claude Code** como API compatível com **OpenAI**.
+  Testa o gateway que expõe o **Claude Code** e a **assinatura ChatGPT (Codex)**
+  como API compatível com **OpenAI**.
 
   ## Antes de começar
 
@@ -13,6 +14,7 @@ docs {
      - `gatewayKey` — uma das `GATEWAY_API_KEYS`
      - `adminKey` — a `ADMIN_API_KEY`
      - `claudeToken` — o token do `claude setup-token` (`sk-ant-oat01-...`)
+     - `codexModel` — um id do catálogo do Codex (só para a pasta **06**)
 
   ## Ordem de uso
 
@@ -21,6 +23,8 @@ docs {
   3. **03 Models e Config** → listar/escolher o modelo.
   4. **04 Chat** → conversar (simples, histórico, streaming).
   5. **05 Agent** → usar as ferramentas do Claude Code (precisa `AGENT_MODE_ENABLED=true`).
+  6. **06 Codex** → backend OpenAI sobre a assinatura ChatGPT (precisa
+     `CODEX_ENABLED=true`).
 
   Cada request tem sua própria aba **Docs** explicando o que faz.
 }
