@@ -150,6 +150,42 @@ def _resolve_effort(settings: Settings) -> ReasoningEffort | None:
     return ReasoningEffort(raw)
 
 
+def _strict_schema(node: Any) -> Any:
+    """Normaliza um JSON Schema para o modo estrito da Responses API.
+
+    O upstream exige `additionalProperties: false` em TODO objeto e que
+    `required` liste TODAS as propriedades — senão responde
+    400 invalid_json_schema. Schemas de clientes OpenAI raramente vêm assim, e
+    traduzir é justamente o trabalho do gateway.
+
+    Efeito colateral a conhecer: campo opcional deixa de existir. É a regra do
+    modo estrito da OpenAI, cuja saída recomendada é `type: ["string","null"]`.
+    """
+    if isinstance(node, list):
+        return [_strict_schema(n) for n in node]
+    if not isinstance(node, dict):
+        return node
+    out = {k: _strict_schema(v) for k, v in node.items()}
+    props = out.get("properties")
+    if isinstance(props, dict):
+        out["additionalProperties"] = False
+        out["required"] = list(props)
+    return out
+
+
+def _resolve_schema(response_format: ResponseFormat | None) -> dict[str, Any] | None:
+    if response_format is None or response_format.type == "text":
+        return None
+    raw = response_format.json_schema or {}
+    if response_format.type == "json_object" and not raw:
+        # Sem schema declarado: o turno exige um, então cai no mínimo aceitável.
+        return {"type": "object", "properties": {}, "additionalProperties": False, "required": []}
+    # O formato oficial da OpenAI é um invólucro {name, strict, schema}; muitos
+    # clientes mandam o schema cru. Aceita os dois.
+    inner = raw.get("schema")
+    return _strict_schema(inner if isinstance(inner, dict) else raw)
+
+
 def build_options(
     mode: str,
     model: str,
@@ -172,13 +208,6 @@ def build_options(
             param="model",
         )
 
-    schema: dict[str, Any] | None = None
-    if response_format is not None and response_format.type == "json_schema":
-        schema = response_format.json_schema
-    elif response_format is not None and response_format.type == "json_object":
-        # Sem schema declarado: o Codex exige um, então cai no mínimo aceitável.
-        schema = {"type": "object"}
-
     instructions = CHAT_BASE_PROMPT + (f"\n\n{system_text}" if system_text else "")
     return CodexOptions(
         model=model,
@@ -191,7 +220,7 @@ def build_options(
         sandbox=Sandbox.read_only,
         approval_mode=ApprovalMode.deny_all,
         effort=_resolve_effort(settings),
-        output_schema=schema,
+        output_schema=_resolve_schema(response_format),
     )
 
 
@@ -263,6 +292,10 @@ _CLIENT_FAULT_INFO = {
     "badRequest": ("invalid_request", None),
 }
 
+# O upstream recusa o schema com um 400 que chega como texto solto. É culpa do
+# cliente (o schema é dele), então não pode virar 500 do gateway.
+_SCHEMA_MARKERS = ("invalid_json_schema", "invalid schema for response_format")
+
 
 def _error_info_value(err: Any) -> str | None:
     info = getattr(err, "codex_error_info", None)
@@ -319,6 +352,10 @@ def classify_run_error(err: Any) -> GatewayError:
             "The operator must re-authenticate via POST /codex/auth/device-code.",
             "upstream_error",
             "upstream_not_authenticated",
+        )
+    if any(m in lowered for m in _SCHEMA_MARKERS):
+        return GatewayError(
+            400, detail, "invalid_request_error", "invalid_json_schema", param="response_format"
         )
     if info in _CLIENT_FAULT_INFO:
         code, param = _CLIENT_FAULT_INFO[info]

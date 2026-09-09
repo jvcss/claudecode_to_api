@@ -167,7 +167,11 @@ O que **não** funciona neste backend, e por quê:
   request. Os campos de `claude_options` ligados ao modo agente (`cwd`,
   `max_turns`, `permission_mode`, `allowed_tools`) são ignorados aqui.
 - Em compensação, `response_format` com `json_schema` é **nativo** neste backend
-  — o schema vai no próprio turno, em vez de ser pedido por prompt.
+  — o schema vai no próprio turno, em vez de ser pedido por prompt. O gateway
+  normaliza o schema para o modo estrito da OpenAI (`additionalProperties:
+  false` e `required` com todas as propriedades), porque o upstream recusa
+  qualquer outra forma. **Efeito colateral:** campo opcional deixa de existir;
+  para manter um, declare `"type": ["string", "null"]`.
 
 ## Conecte suas ferramentas
 

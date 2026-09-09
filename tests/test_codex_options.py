@@ -59,7 +59,48 @@ def test_json_schema_vai_para_output_schema():
         "chat", "gpt-5.6-sol", None, None, _settings(),
         response_format=ResponseFormat(type="json_schema", json_schema=schema),
     )
-    assert opts.output_schema == schema
+    assert opts.output_schema["properties"] == schema["properties"]
+
+
+# O upstream exige additionalProperties:false em todo objeto e required com
+# TODAS as propriedades; senão responde 400 invalid_json_schema.
+def test_schema_e_normalizado_para_o_modo_estrito():
+    schema = {
+        "type": "object",
+        "properties": {
+            "capital": {"type": "string"},
+            "dados": {"type": "object", "properties": {"pop": {"type": "integer"}}},
+        },
+        "required": ["capital"],
+    }
+    out = build_options(
+        "chat", "gpt-5.6-sol", None, None, _settings(),
+        response_format=ResponseFormat(type="json_schema", json_schema=schema),
+    ).output_schema
+    assert out["additionalProperties"] is False
+    assert sorted(out["required"]) == ["capital", "dados"]
+    # a normalização é recursiva
+    assert out["properties"]["dados"]["additionalProperties"] is False
+    assert out["properties"]["dados"]["required"] == ["pop"]
+
+
+# O formato oficial da OpenAI é o invólucro {name, strict, schema}; muitos
+# clientes mandam o schema cru. Os dois precisam funcionar.
+def test_aceita_o_involucro_oficial_e_o_schema_cru():
+    interno = {"type": "object", "properties": {"n": {"type": "integer"}}}
+    com_involucro = build_options(
+        "chat", "gpt-5.6-sol", None, None, _settings(),
+        response_format=ResponseFormat(
+            type="json_schema",
+            json_schema={"name": "resposta", "strict": True, "schema": interno},
+        ),
+    ).output_schema
+    cru = build_options(
+        "chat", "gpt-5.6-sol", None, None, _settings(),
+        response_format=ResponseFormat(type="json_schema", json_schema=interno),
+    ).output_schema
+    assert com_involucro == cru
+    assert "name" not in com_involucro
 
 
 def test_json_object_sem_schema_cai_no_minimo():
@@ -67,7 +108,7 @@ def test_json_object_sem_schema_cai_no_minimo():
         "chat", "gpt-5.6-sol", None, None, _settings(),
         response_format=ResponseFormat(type="json_object"),
     )
-    assert opts.output_schema == {"type": "object"}
+    assert opts.output_schema["additionalProperties"] is False
 
 
 def test_response_format_texto_nao_gera_schema():
